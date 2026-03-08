@@ -37,29 +37,36 @@ class LocationTrackingService {
   Future<void> start() async {
     if (_isRunning) return;
 
-    final hasPermission = await _requestPermission();
-    if (!hasPermission) {
+    try {
+      final hasPermission = await _requestPermission();
+      if (!hasPermission) {
+        dev.log(
+          'LocationTrackingService: permission denied — tracking disabled.',
+          name: 'LocationTrackingService',
+        );
+        return;
+      }
+
+      _isRunning = true;
+      // Fire once immediately, then on every tick.
+      await _uploadCurrentLocation();
+
+      _timer = Timer.periodic(
+        const Duration(seconds: AppConstants.locationUpdateIntervalSeconds),
+        (_) => _uploadCurrentLocation(),
+      );
+
       dev.log(
-        'LocationTrackingService: permission denied — tracking disabled.',
+        'LocationTrackingService started '
+        '(interval: ${AppConstants.locationUpdateIntervalSeconds}s).',
         name: 'LocationTrackingService',
       );
-      return;
+    } catch (e) {
+      dev.log(
+        'LocationTrackingService: initialization failed (plugin error): $e',
+        name: 'LocationTrackingService',
+      );
     }
-
-    _isRunning = true;
-    // Fire once immediately, then on every tick.
-    await _uploadCurrentLocation();
-
-    _timer = Timer.periodic(
-      const Duration(seconds: AppConstants.locationUpdateIntervalSeconds),
-      (_) => _uploadCurrentLocation(),
-    );
-
-    dev.log(
-      'LocationTrackingService started '
-      '(interval: ${AppConstants.locationUpdateIntervalSeconds}s).',
-      name: 'LocationTrackingService',
-    );
   }
 
   /// Stops the periodic upload loop.

@@ -29,12 +29,12 @@ app.post('/api/auth', async (req, res) => {
 
         let google_id, email, name, avatar;
 
-        if (id_token === 'REPLACE_WITH_REAL_GOOGLE_ID_TOKEN') {
+        if (id_token === 'mock_google_id_token_xyz') {
             // Mock user for testing
             google_id = 'mock_google_id_123';
-            email = 'testuser@example.com';
-            name = 'Test User';
-            avatar = null;
+            email = 'mockuser@example.com';
+            name = 'Mock User';
+            avatar = 'https://api.dicebear.com/7.x/avataaars/svg?seed=mockuser';
         } else {
             // Logic for real token verification (commented out for simplicity unless actual CLIENT_ID is provided)
             google_id = 'id_' + id_token.substring(0, 10);
