@@ -30,27 +30,58 @@ class AuthProvider extends ChangeNotifier {
   // ── Actions ────────────────────────────────────────────────────────────────
 
   /// Exchanges a Google [idToken] for a backend access_token, then stores it.
-  ///
-  /// On success, callers should navigate to the main route.
   Future<void> signIn({required String idToken}) async {
     _setLoading(true);
     try {
-      final token = await _api.authenticate(idToken: idToken);
-      // In a real app you'd decode the JWT or call GET /me; here we store a
-      // placeholder until the profile screen fills in the full model.
-      _user = UserModel(
-        id: 'me',
-        name: 'Friend Tracker User',
-        email: '',
-      );
+      _user = await _api.authenticate(idToken: idToken);
       _error = null;
-      debugPrint('AuthProvider: signed in, token length=${token.length}');
     } on ApiException catch (e) {
       _error = e.message;
     } catch (e) {
       _error = e.toString();
     } finally {
       _setLoading(false);
+    }
+  }
+
+  /// Checks if we have a valid token and fetches the user profile.
+  Future<void> checkAuth() async {
+    final token = await TokenStorage.getToken();
+    if (token == null) return;
+    
+    _setLoading(true);
+    try {
+      _user = await _api.getMe();
+    } catch (e) {
+      debugPrint('AuthProvider: auth check failed, clearing token.');
+      await signOut();
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  /// Updates user profile settings and refreshes local state.
+  Future<void> updateSettings({
+    String? name,
+    String? avatar,
+    bool? trackingEnabled,
+    String? visibilityLevel,
+    String? precisionLevel,
+  }) async {
+    try {
+      await _api.updateUserSettings(
+        name: name,
+        avatar: avatar,
+        trackingEnabled: trackingEnabled,
+        visibilityLevel: visibilityLevel,
+        precisionLevel: precisionLevel,
+      );
+      // Refresh user after update
+      _user = await _api.getMe();
+      notifyListeners();
+    } on ApiException catch (e) {
+      _error = e.message;
+      notifyListeners();
     }
   }
 

@@ -10,12 +10,8 @@ import '../core/api_service.dart';
 import 'friends_screen.dart';
 import 'invites_screen.dart';
 import 'login_screen.dart';
+import 'settings_screen.dart';
 
-/// Main map screen.
-///
-/// - Starts the 5-second location upload loop via [LocationTrackingService].
-/// - Refreshes friend markers every 10 seconds.
-/// - Displays a bottom navigation bar to switch to Friends / Invites.
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
 
@@ -34,6 +30,21 @@ class _MapScreenState extends State<MapScreen> {
     zoom: 3,
   );
 
+  // ── Premium Dark Style ──────────────────────────────────────────────────────
+  static const String _darkMapStyle = '''
+[
+  { "elementType": "geometry", "stylers": [{ "color": "#12122a" }] },
+  { "elementType": "labels.text.fill", "stylers": [{ "color": "#8ec3b9" }] },
+  { "elementType": "labels.text.stroke", "stylers": [{ "color": "#12122a" }] },
+  { "featureType": "administrative", "elementType": "geometry", "stylers": [{ "visibility": "off" }] },
+  { "featureType": "poi", "stylers": [{ "visibility": "off" }] },
+  { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#1a1a3d" }] },
+  { "featureType": "road", "elementType": "labels.text.fill", "stylers": [{ "color": "#9ca5b9" }] },
+  { "featureType": "transit", "stylers": [{ "visibility": "off" }] },
+  { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#0d0d1f" }] }
+]
+''';
+
   @override
   void initState() {
     super.initState();
@@ -45,7 +56,6 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _startServices() async {
     await _locationService.start();
-    // Initial fetch right away, then every 10 seconds.
     _fetchFriends();
     _mapRefreshTimer = Timer.periodic(
       const Duration(seconds: AppConstants.mapRefreshIntervalSeconds),
@@ -65,8 +75,6 @@ class _MapScreenState extends State<MapScreen> {
     super.dispose();
   }
 
-  // ── Map helpers ────────────────────────────────────────────────────────────
-
   Set<Marker> _buildMarkers(FriendProvider fp) {
     return fp.friends
         .where((f) => f.latitude != null && f.longitude != null)
@@ -74,11 +82,13 @@ class _MapScreenState extends State<MapScreen> {
           (f) => Marker(
             markerId: MarkerId(f.id),
             position: LatLng(f.latitude!, f.longitude!),
+            alpha: f.isBlurred ? 0.6 : 1.0,
+            icon: BitmapDescriptor.defaultMarkerWithHue(
+              f.isBlurred ? BitmapDescriptor.hueAzure : BitmapDescriptor.hueViolet,
+            ),
             infoWindow: InfoWindow(
-              title: f.name,
-              snippet: f.lastSeen != null
-                  ? 'Last seen: ${_formatTime(f.lastSeen!)}'
-                  : null,
+              title: f.name + (f.isBlurred ? " (Approximate)" : ""),
+              snippet: f.lastSeen != null ? _formatTime(f.lastSeen!) : null,
             ),
           ),
         )
@@ -91,8 +101,6 @@ class _MapScreenState extends State<MapScreen> {
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
     return '${diff.inHours}h ago';
   }
-
-  // ── Sign-out ───────────────────────────────────────────────────────────────
 
   Future<void> _signOut() async {
     _locationService.stop();
@@ -107,32 +115,58 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  // ── Build ──────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('weau'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Sign out',
-            onPressed: _signOut,
-          ),
-        ],
-      ),
+      backgroundColor: const Color(AppConstants.backgroundColor),
+      extendBodyBehindAppBar: _navIndex == 0,
+      appBar: _navIndex == 0
+          ? AppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              title: const Text(
+                'weau',
+                style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white),
+              ),
+              actions: [
+                IconButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                  ),
+                  icon: const Icon(Icons.settings_rounded, color: Colors.white),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.logout_rounded, color: Colors.white),
+                  onPressed: _signOut,
+                ),
+              ],
+            )
+          : AppBar(
+              title: Text(_navIndex == 1 ? 'Friends' : 'Invites'),
+              elevation: 4,
+            ),
       body: _buildBody(),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _navIndex,
-        onTap: (i) => setState(() => _navIndex = i),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Map'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.people), label: 'Friends'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.mail), label: 'Invites'),
-        ],
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: const Color(AppConstants.backgroundColor),
+          border: Border(
+            top: BorderSide(color: Colors.white.withOpacity(0.1), width: 0.5),
+          ),
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _navIndex,
+          onTap: (i) => setState(() => _navIndex = i),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          selectedItemColor: const Color(AppConstants.primaryColor),
+          unselectedItemColor: Colors.white.withOpacity(0.4),
+          type: BottomNavigationBarType.fixed,
+          items: const [
+            BottomNavigationBarItem(icon: Icon(Icons.radar_rounded), label: 'Map'),
+            BottomNavigationBarItem(icon: Icon(Icons.people_alt_rounded), label: 'Friends'),
+            BottomNavigationBarItem(icon: Icon(Icons.mail_outline_rounded), label: 'Invites'),
+          ],
+        ),
       ),
     );
   }
@@ -153,10 +187,15 @@ class _MapScreenState extends State<MapScreen> {
       builder: (_, fp, __) {
         return GoogleMap(
           initialCameraPosition: _initialCamera,
-          onMapCreated: (c) => _mapController = c,
+          onMapCreated: (c) {
+            _mapController = c;
+            _mapController?.setMapStyle(_darkMapStyle);
+          },
           markers: _buildMarkers(fp),
           myLocationEnabled: true,
-          myLocationButtonEnabled: true,
+          myLocationButtonEnabled: false, // will use custom floating button
+          zoomControlsEnabled: false,
+          compassEnabled: false,
         );
       },
     );

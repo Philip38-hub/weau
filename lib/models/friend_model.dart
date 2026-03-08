@@ -6,6 +6,7 @@ class FriendModel {
   final double? latitude;
   final double? longitude;
   final DateTime? lastSeen;
+  final bool isBlurred;
 
   const FriendModel({
     required this.id,
@@ -14,6 +15,7 @@ class FriendModel {
     this.latitude,
     this.longitude,
     this.lastSeen,
+    this.isBlurred = false,
   });
 
   factory FriendModel.fromJson(Map<String, dynamic> json) {
@@ -26,6 +28,7 @@ class FriendModel {
       lastSeen: json['last_seen'] != null
           ? DateTime.tryParse(json['last_seen'] as String)
           : null,
+      isBlurred: json['is_blurred'] as bool? ?? false,
     );
   }
 

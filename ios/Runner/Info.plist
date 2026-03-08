@@ -43,6 +43,12 @@
 	</array>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>weau needs access to your location to share it with your friends while the app is in use.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>weau needs access to your location to share it with your friends even when the app is in the background.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>weau needs access to your location to share it with your friends even when the app is in the background.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 </dict>

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/constants.dart';
+import '../models/user_model.dart';
 
 /// Thin persistence wrapper around [SharedPreferences] for the JWT token.
 class TokenStorage {
@@ -102,8 +103,8 @@ class ApiService {
   /// Exchanges a Google [idToken] for a backend [accessToken].
   /// Persists the token via [TokenStorage] automatically.
   ///
-  /// Returns the raw `access_token` string.
-  Future<String> authenticate({required String idToken}) async {
+  /// Returns the [UserModel].
+  Future<UserModel> authenticate({required String idToken}) async {
     final response = await _client.post(
       Uri.parse('$_base/auth'),
       headers: {'Content-Type': 'application/json'},
@@ -112,28 +113,51 @@ class ApiService {
     final data = _decode(response);
     final token = data['access_token'] as String;
     await TokenStorage.saveToken(token);
-    return token;
+    return UserModel.fromJson(data['user'] as Map<String, dynamic>);
   }
 
   // ── User ──────────────────────────────────────────────────────────────────
 
+  /// GET /users/me
+  Future<UserModel> getMe() async {
+    final response = await _client.get(
+      Uri.parse('$_base/users/me'),
+      headers: await _authHeaders(),
+    );
+    return UserModel.fromJson(_decode(response));
+  }
+
   /// PUT /users
   ///
-  /// Updates the authenticated user's [name] and/or [avatar] URL.
-  Future<Map<String, dynamic>> updateUser({
+  /// Updates the authenticated user's profile and settings.
+  Future<void> updateUserSettings({
     String? name,
     String? avatar,
+    bool? trackingEnabled,
+    String? visibilityLevel,
+    String? precisionLevel,
   }) async {
     final body = <String, dynamic>{};
     if (name != null) body['name'] = name;
     if (avatar != null) body['avatar'] = avatar;
+    if (trackingEnabled != null) body['tracking_enabled'] = trackingEnabled;
+    if (visibilityLevel != null) body['visibility_level'] = visibilityLevel;
+    if (precisionLevel != null) body['precision_level'] = precisionLevel;
 
     final response = await _client.put(
       Uri.parse('$_base/users'),
       headers: await _authHeaders(),
       body: jsonEncode(body),
     );
-    return _decode(response);
+    _decode(response);
+  }
+
+  /// PUT /users - Deprecated old method
+  Future<Map<String, dynamic>> updateUser({
+    String? name,
+    String? avatar,
+  }) async {
+    return updateUserSettings(name: name, avatar: avatar).then((_) => {});
   }
 
   // ── Location ──────────────────────────────────────────────────────────────

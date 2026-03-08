@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'core/constants.dart';
 import 'core/api_service.dart';
 import 'providers/auth_provider.dart';
 import 'providers/friend_provider.dart';
@@ -27,7 +28,7 @@ class FriendTrackerApp extends StatelessWidget {
         Provider<ApiService>(create: (_) => apiService),
         // Auth state.
         ChangeNotifierProvider(
-          create: (_) => AuthProvider(apiService: apiService),
+          create: (_) => AuthProvider(apiService: apiService)..checkAuth(),
         ),
         // Friends & invites state.
         ChangeNotifierProvider(
@@ -38,8 +39,29 @@ class FriendTrackerApp extends StatelessWidget {
         title: 'weau',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
           useMaterial3: true,
+          brightness: Brightness.dark,
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(AppConstants.primaryColor),
+            brightness: Brightness.dark,
+            background: const Color(AppConstants.backgroundColor),
+          ),
+          textTheme: const TextTheme(
+            headlineMedium: TextStyle(
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.2,
+            ),
+          ),
+          elevatedButtonTheme: ElevatedButtonThemeData(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(AppConstants.primaryColor),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+            ),
+          ),
         ),
         home: const LoginScreen(),
       ),
