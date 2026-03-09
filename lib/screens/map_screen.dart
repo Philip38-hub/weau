@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 import '../core/constants.dart';
@@ -24,11 +25,18 @@ class _MapScreenState extends State<MapScreen> {
   late final LocationTrackingService _locationService;
   Timer? _mapRefreshTimer;
   int _navIndex = 0;
+  bool _isPreparingMap = true;
+  bool _hasCenteredOnUser = false;
+  bool _myLocationEnabled = false;
+  LatLng? _currentUserLatLng;
 
-  static const _initialCamera = CameraPosition(
+  static const _fallbackCamera = CameraPosition(
     target: LatLng(0, 0),
     zoom: 3,
   );
+  static const double _townZoom = 15.5;
+
+  CameraPosition _initialCameraPosition = _fallbackCamera;
 
   // ── Premium Dark Style ──────────────────────────────────────────────────────
   static const String _darkMapStyle = '''
@@ -51,7 +59,11 @@ class _MapScreenState extends State<MapScreen> {
     _locationService = LocationTrackingService(
       apiService: context.read<ApiService>(),
     );
-    _startServices();
+    _initializeScreen();
+  }
+
+  Future<void> _initializeScreen() async {
+    await Future.wait([_startServices(), _prepareInitialCamera()]);
   }
 
   Future<void> _startServices() async {
@@ -67,6 +79,43 @@ class _MapScreenState extends State<MapScreen> {
     context.read<FriendProvider>().fetchFriends();
   }
 
+  Future<void> _prepareInitialCamera() async {
+    try {
+      final Position? position = await _locationService.getCurrentPosition();
+      if (!mounted) return;
+
+      setState(() {
+        if (position != null) {
+          _currentUserLatLng = LatLng(position.latitude, position.longitude);
+          _initialCameraPosition = CameraPosition(
+            target: _currentUserLatLng!,
+            zoom: _townZoom,
+          );
+          _myLocationEnabled = true;
+        }
+        _isPreparingMap = false;
+      });
+
+      await _moveCameraToUser();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isPreparingMap = false);
+    }
+  }
+
+  Future<void> _moveCameraToUser() async {
+    if (_mapController == null || _currentUserLatLng == null || _hasCenteredOnUser) {
+      return;
+    }
+
+    _hasCenteredOnUser = true;
+    await _mapController!.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(target: _currentUserLatLng!, zoom: _townZoom),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _locationService.stop();
@@ -76,7 +125,7 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Set<Marker> _buildMarkers(FriendProvider fp) {
-    return fp.friends
+    final markers = fp.friends
         .where((f) => f.latitude != null && f.longitude != null)
         .map(
           (f) => Marker(
@@ -93,6 +142,22 @@ class _MapScreenState extends State<MapScreen> {
           ),
         )
         .toSet();
+
+    if (_currentUserLatLng != null) {
+      markers.add(
+        Marker(
+          markerId: const MarkerId('current-user'),
+          position: _currentUserLatLng!,
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueRose,
+          ),
+          zIndexInt: 2,
+          infoWindow: const InfoWindow(title: 'You'),
+        ),
+      );
+    }
+
+    return markers;
   }
 
   String _formatTime(DateTime dt) {
@@ -117,26 +182,33 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: const Color(AppConstants.backgroundColor),
+      backgroundColor: theme.scaffoldBackgroundColor,
       extendBodyBehindAppBar: _navIndex == 0,
       appBar: _navIndex == 0
           ? AppBar(
-              backgroundColor: Colors.transparent,
+              backgroundColor: scheme.surface.withValues(
+                alpha: isDark ? 0.78 : 0.92,
+              ),
               elevation: 0,
+              surfaceTintColor: Colors.transparent,
               title: const Text(
                 'weau',
-                style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white),
+                style: TextStyle(fontWeight: FontWeight.w900),
               ),
               actions: [
                 IconButton(
                   onPressed: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const SettingsScreen()),
                   ),
-                  icon: const Icon(Icons.settings_rounded, color: Colors.white),
+                  icon: const Icon(Icons.settings_rounded),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.logout_rounded, color: Colors.white),
+                  icon: const Icon(Icons.logout_rounded),
                   onPressed: _signOut,
                 ),
               ],
@@ -148,9 +220,12 @@ class _MapScreenState extends State<MapScreen> {
       body: _buildBody(),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: const Color(AppConstants.backgroundColor),
+          color: scheme.surface,
           border: Border(
-            top: BorderSide(color: Colors.white.withOpacity(0.1), width: 0.5),
+            top: BorderSide(
+              color: scheme.outlineVariant.withValues(alpha: 0.5),
+              width: 0.5,
+            ),
           ),
         ),
         child: BottomNavigationBar(
@@ -158,8 +233,8 @@ class _MapScreenState extends State<MapScreen> {
           onTap: (i) => setState(() => _navIndex = i),
           backgroundColor: Colors.transparent,
           elevation: 0,
-          selectedItemColor: const Color(AppConstants.primaryColor),
-          unselectedItemColor: Colors.white.withOpacity(0.4),
+          selectedItemColor: scheme.primary,
+          unselectedItemColor: scheme.onSurfaceVariant,
           type: BottomNavigationBarType.fixed,
           items: const [
             BottomNavigationBarItem(icon: Icon(Icons.radar_rounded), label: 'Map'),
@@ -183,16 +258,27 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Widget _buildMap() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    if (_isPreparingMap) {
+      return const Center(
+        child: CircularProgressIndicator(
+          color: Color(AppConstants.primaryColor),
+        ),
+      );
+    }
+
     return Consumer<FriendProvider>(
       builder: (_, fp, __) {
         return GoogleMap(
-          initialCameraPosition: _initialCamera,
-          onMapCreated: (c) {
+          initialCameraPosition: _initialCameraPosition,
+          style: isDark ? _darkMapStyle : null,
+          onMapCreated: (c) async {
             _mapController = c;
-            _mapController?.setMapStyle(_darkMapStyle);
+            await _moveCameraToUser();
           },
           markers: _buildMarkers(fp),
-          myLocationEnabled: true,
+          myLocationEnabled: _myLocationEnabled,
           myLocationButtonEnabled: false, // will use custom floating button
           zoomControlsEnabled: false,
           compassEnabled: false,

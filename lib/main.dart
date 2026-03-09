@@ -1,21 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'core/constants.dart';
+import 'core/app_theme.dart';
 import 'core/api_service.dart';
 import 'providers/auth_provider.dart';
 import 'providers/friend_provider.dart';
+import 'providers/theme_provider.dart';
 import 'screens/login_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
-  runApp(const FriendTrackerApp());
+  final themeProvider = ThemeProvider();
+  await themeProvider.loadTheme();
+  runApp(FriendTrackerApp(themeProvider: themeProvider));
 }
 
 /// Root widget. Provides [ApiService] and both providers globally.
 class FriendTrackerApp extends StatelessWidget {
-  const FriendTrackerApp({super.key});
+  final ThemeProvider themeProvider;
+
+  const FriendTrackerApp({super.key, required this.themeProvider});
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +32,8 @@ class FriendTrackerApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         // Raw service — accessed by MapScreen to build LocationTrackingService.
-        Provider<ApiService>(create: (_) => apiService),
+        Provider<ApiService>.value(value: apiService),
+        ChangeNotifierProvider<ThemeProvider>.value(value: themeProvider),
         // Auth state.
         ChangeNotifierProvider(
           create: (_) => AuthProvider(apiService: apiService)..checkAuth(),
@@ -37,35 +43,15 @@ class FriendTrackerApp extends StatelessWidget {
           create: (_) => FriendProvider(apiService: apiService),
         ),
       ],
-      child: MaterialApp(
-        title: 'weau',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          useMaterial3: true,
-          brightness: Brightness.dark,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(AppConstants.primaryColor),
-            brightness: Brightness.dark,
-            background: const Color(AppConstants.backgroundColor),
-          ),
-          textTheme: const TextTheme(
-            headlineMedium: TextStyle(
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.2,
-            ),
-          ),
-          elevatedButtonTheme: ElevatedButtonThemeData(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(AppConstants.primaryColor),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 16),
-            ),
-          ),
+      child: Consumer<ThemeProvider>(
+        builder: (context, theme, _) => MaterialApp(
+          title: 'weau',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light(),
+          darkTheme: AppTheme.dark(),
+          themeMode: theme.themeMode,
+          home: const LoginScreen(),
         ),
-        home: const LoginScreen(),
       ),
     );
   }

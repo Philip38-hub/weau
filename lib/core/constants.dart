@@ -17,6 +17,7 @@ class AppConstants {
 
   // ── Storage keys ─────────────────────────────────────────────────────────
   static const String tokenKey = 'access_token';
+  static const String themeModeKey = 'theme_mode';
 
   // ── Intervals ────────────────────────────────────────────────────────────
   /// How often (seconds) the app pushes its own location to the backend.

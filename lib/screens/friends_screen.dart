@@ -39,10 +39,16 @@ class _FriendsScreenState extends State<FriendsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final inputFillColor = isDark
+        ? Colors.white.withValues(alpha: 0.05)
+        : scheme.primary.withValues(alpha: 0.06);
+    final cardColor = isDark ? Colors.white.withValues(alpha: 0.03) : Colors.white;
+
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(AppConstants.backgroundColor),
-      ),
+      color: theme.scaffoldBackgroundColor,
       child: Consumer<FriendProvider>(
         builder: (ctx, fp, _) {
           final visible = _filter(fp.friends);
@@ -52,13 +58,13 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 padding: const EdgeInsets.all(20),
                 child: TextField(
                   controller: _searchController,
-                  style: const TextStyle(color: Colors.white),
+                  style: TextStyle(color: scheme.onSurface),
                   decoration: InputDecoration(
                     hintText: 'Search friends...',
-                    hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+                    hintStyle: TextStyle(color: scheme.onSurfaceVariant),
                     prefixIcon: const Icon(Icons.search_rounded, color: Color(AppConstants.primaryColor)),
                     filled: true,
-                    fillColor: Colors.white.withOpacity(0.05),
+                    fillColor: inputFillColor,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(20),
                       borderSide: BorderSide.none,
@@ -74,7 +80,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                         ? Center(
                             child: Text(
                               'No friends found.',
-                              style: TextStyle(color: Colors.white.withOpacity(0.5)),
+                              style: TextStyle(color: scheme.onSurfaceVariant),
                             ),
                           )
                         : ListView.builder(
@@ -85,14 +91,16 @@ class _FriendsScreenState extends State<FriendsScreen> {
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 12),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.03),
+                                  color: cardColor,
                                   borderRadius: BorderRadius.circular(20),
                                 ),
                                 child: ListTile(
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                                   leading: CircleAvatar(
                                     radius: 25,
-                                    backgroundColor: const Color(AppConstants.primaryColor).withOpacity(0.2),
+                                    backgroundColor: const Color(
+                                      AppConstants.primaryColor,
+                                    ).withValues(alpha: 0.2),
                                     backgroundImage: friend.avatar != null ? NetworkImage(friend.avatar!) : null,
                                     child: friend.avatar == null
                                         ? Text(
@@ -103,12 +111,15 @@ class _FriendsScreenState extends State<FriendsScreen> {
                                   ),
                                   title: Text(
                                     friend.name,
-                                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                                    style: const TextStyle(fontWeight: FontWeight.bold),
                                   ),
                                   subtitle: friend.lastSeen != null
                                       ? Text(
                                           'Last seen: ${friend.lastSeen}',
-                                          style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12),
+                                          style: TextStyle(
+                                            color: scheme.onSurfaceVariant,
+                                            fontSize: 12,
+                                          ),
                                         )
                                       : null,
                                   trailing: IconButton(
@@ -128,17 +139,17 @@ class _FriendsScreenState extends State<FriendsScreen> {
   }
 
   Future<void> _confirmRemove(BuildContext ctx, FriendModel friend) async {
+    final scheme = Theme.of(ctx).colorScheme;
     final confirmed = await showDialog<bool>(
       context: ctx,
       builder: (_) => AlertDialog(
-        backgroundColor: const Color(AppConstants.secondaryColor),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Remove friend?'),
         content: Text('Remove ${friend.name} from your friends list?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white)),
+            child: Text('Cancel', style: TextStyle(color: scheme.onSurfaceVariant)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),

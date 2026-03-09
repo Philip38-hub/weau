@@ -34,6 +34,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
   Future<void> _handleSignIn() async {
     setState(() => _signingIn = true);
+    final authProvider = context.read<AuthProvider>();
+
     try {
       final googleSignIn = GoogleSignIn(
         serverClientId: dotenv.env['GOOGLE_WEB_CLIENT_ID'], 
@@ -53,7 +55,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         throw Exception('Failed to get ID token from Google Sign-In.');
       }
 
-      final authProvider = context.read<AuthProvider>();
       await authProvider.signIn(idToken: idToken);
 
       if (!mounted) return;
@@ -92,9 +93,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final background = theme.scaffoldBackgroundColor;
     
     return Scaffold(
-      backgroundColor: const Color(AppConstants.backgroundColor),
+      backgroundColor: background,
       body: Stack(
         children: [
           // ── Animated Background ─────────────────────────────────────────────
@@ -107,13 +111,15 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      const Color(AppConstants.backgroundColor),
+                      background,
                       Color.lerp(
-                        const Color(AppConstants.backgroundColor),
-                        const Color(AppConstants.primaryColor).withOpacity(0.2),
+                        background,
+                        scheme.primary.withValues(
+                          alpha: isDark ? 0.2 : 0.08,
+                        ),
                         _controller.value,
                       )!,
-                      const Color(AppConstants.backgroundColor),
+                      background,
                     ],
                   ),
                 ),
@@ -145,7 +151,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       child: Container(
                         padding: const EdgeInsets.all(24),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.05),
+                          color: scheme.primary.withValues(
+                            alpha: isDark ? 0.12 : 0.08,
+                          ),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
@@ -163,7 +171,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         fontSize: 64,
                         fontWeight: FontWeight.w900,
                         letterSpacing: -2,
-                        color: Colors.white,
+                        color: scheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -172,7 +180,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 16,
-                        color: Colors.white.withOpacity(0.5),
+                        color: scheme.onSurfaceVariant,
                         letterSpacing: 0.5,
                       ),
                     ),

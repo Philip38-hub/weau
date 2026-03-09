@@ -38,18 +38,14 @@ class LocationTrackingService {
     if (_isRunning) return;
 
     try {
-      final hasPermission = await _requestPermission();
-      if (!hasPermission) {
-        dev.log(
-          'LocationTrackingService: permission denied — tracking disabled.',
-          name: 'LocationTrackingService',
-        );
-        return;
-      }
+      final position = await getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium,
+      );
+      if (position == null) return;
 
       _isRunning = true;
       // Fire once immediately, then on every tick.
-      await _uploadCurrentLocation();
+      await _sendLocation(position);
 
       _timer = Timer.periodic(
         const Duration(seconds: AppConstants.locationUpdateIntervalSeconds),
@@ -79,6 +75,37 @@ class LocationTrackingService {
 
   // ── Private helpers ───────────────────────────────────────────────────────
 
+  /// Returns the device's current position when location permission is granted.
+  /// Falls back to the last known position if a live fix is temporarily slow.
+  Future<Position?> getCurrentPosition({
+    LocationAccuracy desiredAccuracy = LocationAccuracy.high,
+    Duration timeLimit = const Duration(seconds: 10),
+  }) async {
+    final hasPermission = await _requestPermission();
+    if (!hasPermission) {
+      dev.log(
+        'LocationTrackingService: permission denied — tracking disabled.',
+        name: 'LocationTrackingService',
+      );
+      return null;
+    }
+
+    try {
+      return await Geolocator.getCurrentPosition(
+        locationSettings: LocationSettings(
+          accuracy: desiredAccuracy,
+          timeLimit: timeLimit,
+        ),
+      );
+    } catch (e) {
+      dev.log(
+        'Falling back to last known position: $e',
+        name: 'LocationTrackingService',
+      );
+      return Geolocator.getLastKnownPosition();
+    }
+  }
+
   /// Requests foreground location permission from the OS.
   /// Returns `true` if the permission is granted.
   Future<bool> _requestPermission() async {
@@ -106,20 +133,13 @@ class LocationTrackingService {
   /// cancel the entire periodic loop.
   Future<void> _uploadCurrentLocation() async {
     try {
-      final position = await Geolocator.getCurrentPosition(
+      final position = await getCurrentPosition(
         desiredAccuracy: LocationAccuracy.medium,
         timeLimit: const Duration(seconds: 10),
       );
+      if (position == null) return;
 
-      await _api.updateLocation(
-        latitude: position.latitude,
-        longitude: position.longitude,
-      );
-
-      dev.log(
-        'Location uploaded: (${position.latitude}, ${position.longitude})',
-        name: 'LocationTrackingService',
-      );
+      await _sendLocation(position);
     } on ApiException catch (e) {
       dev.log(
         'Backend error uploading location: $e',
@@ -133,5 +153,17 @@ class LocationTrackingService {
         error: e,
       );
     }
+  }
+
+  Future<void> _sendLocation(Position position) async {
+    await _api.updateLocation(
+      latitude: position.latitude,
+      longitude: position.longitude,
+    );
+
+    dev.log(
+      'Location uploaded: (${position.latitude}, ${position.longitude})',
+      name: 'LocationTrackingService',
+    );
   }
 }

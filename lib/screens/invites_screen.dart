@@ -52,8 +52,16 @@ class _InvitesScreenState extends State<InvitesScreen> with SingleTickerProvider
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final inputFillColor = isDark
+        ? Colors.white.withValues(alpha: 0.05)
+        : scheme.primary.withValues(alpha: 0.06);
+    final cardColor = isDark ? Colors.white.withValues(alpha: 0.03) : Colors.white;
+
     return Container(
-      color: const Color(AppConstants.backgroundColor),
+      color: theme.scaffoldBackgroundColor,
       child: Column(
         children: [
           // ── Premium Search Bar ─────────────────────────────────────────────
@@ -65,13 +73,13 @@ class _InvitesScreenState extends State<InvitesScreen> with SingleTickerProvider
                   child: TextField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
-                    style: const TextStyle(color: Colors.white),
+                    style: TextStyle(color: scheme.onSurface),
                     decoration: InputDecoration(
                       hintText: 'Enter email address...',
-                      hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+                      hintStyle: TextStyle(color: scheme.onSurfaceVariant),
                       prefixIcon: const Icon(Icons.alternate_email_rounded, color: Color(AppConstants.primaryColor)),
                       filled: true,
-                      fillColor: Colors.white.withOpacity(0.05),
+                      fillColor: inputFillColor,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(20),
                         borderSide: BorderSide.none,
@@ -101,7 +109,7 @@ class _InvitesScreenState extends State<InvitesScreen> with SingleTickerProvider
             controller: _tabController,
             indicatorColor: const Color(AppConstants.primaryColor),
             labelColor: const Color(AppConstants.primaryColor),
-            unselectedLabelColor: Colors.white.withOpacity(0.4),
+            unselectedLabelColor: scheme.onSurfaceVariant,
             indicatorSize: TabBarIndicatorSize.label,
             tabs: const [
               Tab(text: 'Incoming'),
@@ -113,8 +121,8 @@ class _InvitesScreenState extends State<InvitesScreen> with SingleTickerProvider
             child: TabBarView(
               controller: _tabController,
               children: [
-                _InviteList(type: InviteDirection.incoming),
-                _InviteList(type: InviteDirection.outgoing),
+                _InviteList(type: InviteDirection.incoming, cardColor: cardColor),
+                _InviteList(type: InviteDirection.outgoing, cardColor: cardColor),
               ],
             ),
           ),
@@ -126,10 +134,13 @@ class _InvitesScreenState extends State<InvitesScreen> with SingleTickerProvider
 
 class _InviteList extends StatelessWidget {
   final InviteDirection type;
-  const _InviteList({required this.type});
+  final Color cardColor;
+
+  const _InviteList({required this.type, required this.cardColor});
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Consumer<FriendProvider>(
       builder: (ctx, fp, _) {
         if (fp.isLoadingInvites) {
@@ -141,7 +152,7 @@ class _InviteList extends StatelessWidget {
           return Center(
             child: Text(
               type == InviteDirection.incoming ? 'No incoming requests.' : 'No outgoing requests.',
-              style: TextStyle(color: Colors.white.withOpacity(0.5)),
+              style: TextStyle(color: scheme.onSurfaceVariant),
             ),
           );
         }
@@ -154,18 +165,20 @@ class _InviteList extends StatelessWidget {
             return Container(
               margin: const EdgeInsets.only(bottom: 12),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.03),
+                color: cardColor,
                 borderRadius: BorderRadius.circular(20),
               ),
               child: ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 leading: CircleAvatar(
                   radius: 25,
-                  backgroundColor: const Color(AppConstants.primaryColor).withOpacity(0.2),
+                  backgroundColor: const Color(
+                    AppConstants.primaryColor,
+                  ).withValues(alpha: 0.2),
                   child: Text(invite.userName[0].toUpperCase(), style: const TextStyle(color: Color(AppConstants.primaryColor))),
                 ),
                 title: Text(invite.userName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text(invite.status.name, style: TextStyle(color: Colors.white.withOpacity(0.4))),
+                subtitle: Text(invite.status.name, style: TextStyle(color: scheme.onSurfaceVariant)),
                 trailing: type == InviteDirection.incoming
                     ? Row(
                         mainAxisSize: MainAxisSize.min,
