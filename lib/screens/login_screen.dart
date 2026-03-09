@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import '../core/constants.dart';
 import '../providers/auth_provider.dart';
 import 'map_screen.dart';
@@ -33,8 +34,24 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   Future<void> _handleSignIn() async {
     setState(() => _signingIn = true);
     try {
-      // Mock Google Sign-In token
-      const idToken = 'mock_google_id_token_xyz';
+      // TODO: Replace 'YOUR_WEB_CLIENT_ID' with your Web Client ID from Google Cloud Console
+      final googleSignIn = GoogleSignIn(
+        serverClientId: '885195804964-8n79jrcupav06megnm6et2jvgth803es.apps.googleusercontent.com', // Needed to get a backend-verifiable idToken
+        scopes: ['email', 'profile'],
+      );
+      final googleUser = await googleSignIn.signIn();
+
+      if (googleUser == null) {
+        // User canceled the sign-in
+        return;
+      }
+
+      final googleAuth = await googleUser.authentication;
+      final idToken = googleAuth.idToken;
+
+      if (idToken == null) {
+        throw Exception('Failed to get ID token from Google Sign-In.');
+      }
 
       final authProvider = context.read<AuthProvider>();
       await authProvider.signIn(idToken: idToken);
@@ -52,6 +69,18 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           SnackBar(
             content: Text(authProvider.error!),
             backgroundColor: const Color(AppConstants.accentColor),
+          ),
+        );
+      }
+    } catch (e, stackTrace) {
+      debugPrint('Sign-in error: $e');
+      debugPrint('Stack trace: $stackTrace');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Google Sign-In failed: $e'),
+            backgroundColor: const Color(AppConstants.accentColor),
+            duration: const Duration(seconds: 4),
           ),
         );
       }
