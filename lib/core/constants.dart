@@ -3,10 +3,15 @@ class AppConstants {
   AppConstants._();
 
   // ── API ──────────────────────────────────────────────────────────────────
-  // Use '10.0.2.2' for Android Emulator to hit localhost. 
-  // For physical devices, replace with your LAN IP (e.g., '192.168.1.5').
-  static const String _host = '192.168.1.155'; // Change to LAN IP if on physical device
-  static const String baseUrl = 'http://$_host:3000/api';
+  // Development settings
+  static const String _devHost = '192.168.1.155'; // Change to your LAN IP if on physical device
+  static const String _devBaseUrl = 'http://$_devHost:3000/api';
+  
+  // Production settings (update this with your Railway URL after deployment)
+  static const String _prodBaseUrl = 'https://your-app-name.up.railway.app/api';
+  
+  // Use development URL for now, switch to production after deployment
+  static const String baseUrl = _devBaseUrl;
 
   // ── Colors ───────────────────────────────────────────────────────────────
   static const int primaryColor = 0xFF6C63FF;
