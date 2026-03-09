@@ -43,15 +43,18 @@ app.post('/api/auth', async (req, res) => {
             avatar = null;
         }
 
-        //Upsert user
-        let user = db.prepare('SELECT * FROM users WHERE google_id = ?').get(google_id);
+        // Upsert user using PostgreSQL's ON CONFLICT syntax
+        const userResult = await db.query(`
+            INSERT INTO users (id, google_id, name, email, avatar, tracking_enabled, visibility_level, precision_level)
+            VALUES ($1, $2, $3, $4, $5, true, 'friends', 'exact')
+            ON CONFLICT (google_id) DO UPDATE SET
+                name = EXCLUDED.name,
+                email = EXCLUDED.email,
+                avatar = EXCLUDED.avatar
+            RETURNING *
+        `, [uuidv4(), google_id, name, email, avatar]);
 
-        if (!user) {
-            const id = uuidv4();
-            db.prepare('INSERT INTO users (id, google_id, name, email, avatar) VALUES (?, ?, ?, ?, ?)')
-                .run(id, google_id, name, email, avatar);
-            user = { id, google_id, name, email, avatar };
-        }
+        const user = userResult.rows[0];
 
         const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
         res.json({ access_token: token, user });
@@ -66,166 +69,269 @@ app.post('/api/auth', async (req, res) => {
 app.use(authMiddleware);
 
 // GET /api/users/me
-app.get('/api/users/me', (req, res) => {
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
-    res.json(user);
+app.get('/api/users/me', async (req, res) => {
+    try {
+        const result = await db.query('SELECT * FROM users WHERE id = $1', [req.user.id]);
+        const user = result.rows[0];
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        res.json(user);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Server error' });
+    }
 });
 
 // PUT /api/users
-app.put('/api/users', (req, res) => {
+app.put('/api/users', async (req, res) => {
     const { name, avatar, tracking_enabled, visibility_level, precision_level } = req.body;
 
     const updates = [];
-    const params = [];
+    const values = [];
+    let paramCount = 1;
 
-    if (name !== undefined) { updates.push('name = ?'); params.push(name); }
-    if (avatar !== undefined) { updates.push('avatar = ?'); params.push(avatar); }
-    if (tracking_enabled !== undefined) { updates.push('tracking_enabled = ?'); params.push(tracking_enabled ? 1 : 0); }
-    if (visibility_level !== undefined) { updates.push('visibility_level = ?'); params.push(visibility_level); }
-    if (precision_level !== undefined) { updates.push('precision_level = ?'); params.push(precision_level); }
+    if (name !== undefined) { 
+        updates.push(`name = $${paramCount++}`); 
+        values.push(name); 
+    }
+    if (avatar !== undefined) { 
+        updates.push(`avatar = $${paramCount++}`); 
+        values.push(avatar); 
+    }
+    if (tracking_enabled !== undefined) { 
+        updates.push(`tracking_enabled = $${paramCount++}`); 
+        values.push(tracking_enabled); 
+    }
+    if (visibility_level !== undefined) { 
+        updates.push(`visibility_level = $${paramCount++}`); 
+        values.push(visibility_level); 
+    }
+    if (precision_level !== undefined) { 
+        updates.push(`precision_level = $${paramCount++}`); 
+        values.push(precision_level); 
+    }
 
     if (updates.length === 0) return res.status(400).json({ message: 'No updates provided' });
 
-    params.push(req.user.id);
-    db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+    values.push(req.user.id); // Add user ID for WHERE clause
 
-    res.json({ message: 'User updated' });
+    try {
+        await db.query(`UPDATE users SET ${updates.join(', ')} WHERE id = $${paramCount}`, values);
+        res.json({ message: 'User updated' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Server error' });
+    }
 });
 
 // POST /api/locations
-app.post('/api/locations', (req, res) => {
+app.post('/api/locations', async (req, res) => {
     const { latitude, longitude } = req.body;
     if (latitude === undefined || longitude === undefined) {
         return res.status(400).json({ message: 'Lat/Lng required' });
     }
 
-    db.prepare('UPDATE users SET last_lat = ?, last_lng = ?, last_seen_at = CURRENT_TIMESTAMP WHERE id = ?')
-        .run(latitude, longitude, req.user.id);
-
-    res.json({ message: 'Location updated' });
+    try {
+        await db.query(
+            'UPDATE users SET last_lat = $1, last_lng = $2, last_seen_at = NOW() WHERE id = $3',
+            [latitude, longitude, req.user.id]
+        );
+        res.json({ message: 'Location updated' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Server error' });
+    }
 });
 
 // ── Invites ─────────────────────────────────────────────────────────────────
 
 // POST /api/invites/:userId
-app.post('/api/invites/:userId', (req, res) => {
+app.post('/api/invites/:userId', async (req, res) => {
     const receiverEmailOrId = req.params.userId;
     const senderId = req.user.id;
 
-    // Find receiver
-    const receiver = db.prepare('SELECT id FROM users WHERE id = ? OR email = ?').get(receiverEmailOrId, receiverEmailOrId);
-    if (!receiver) return res.status(404).json({ message: 'User not found' });
-    if (receiver.id === senderId) return res.status(400).json({ message: 'Cannot invite yourself' });
-
     try {
-        db.prepare('INSERT INTO invitations (id, sender_id, receiver_id) VALUES (?, ?, ?)')
-            .run(uuidv4(), senderId, receiver.id);
-        res.json({ message: 'Invite sent' });
+        // Find receiver by ID or email
+        const receiverResult = await db.query(
+            'SELECT id FROM users WHERE id = $1 OR email = $1',
+            [receiverEmailOrId]
+        );
+        
+        if (receiverResult.rows.length === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        
+        const receiver = receiverResult.rows[0];
+        
+        if (receiver.id === senderId) {
+            return res.status(400).json({ message: 'Cannot invite yourself' });
+        }
+
+        // Try to insert invite, handle conflict if already exists
+        try {
+            await db.query(
+                'INSERT INTO invitations (id, sender_id, receiver_id) VALUES ($1, $2, $3)',
+                [uuidv4(), senderId, receiver.id]
+            );
+            res.json({ message: 'Invite sent' });
+        } catch (err) {
+            res.status(400).json({ message: 'Invite already exists or error' });
+        }
     } catch (err) {
-        res.status(400).json({ message: 'Invite already exists or error' });
+        console.error(err);
+        res.status(500).json({ message: 'Server error' });
     }
 });
 
-// GET /api/invites/:userId (userId is ignore, we use req.user.id)
-app.get('/api/invites/:userId', (req, res) => {
+// GET /api/invites/:userId (userId is ignored, we use req.user.id)
+app.get('/api/invites/:userId', async (req, res) => {
     const userId = req.user.id;
 
-    const incoming = db.prepare(`
-    SELECT i.id, i.sender_id as user_id, u.name as user_name, u.avatar as user_avatar, 'incoming' as direction, i.status
-    FROM invitations i
-    JOIN users u ON i.sender_id = u.id
-    WHERE i.receiver_id = ? AND i.status = 'pending'
-  `).all(userId);
+    try {
+        const incomingResult = await db.query(`
+            SELECT i.id, i.sender_id as user_id, u.name as user_name, u.avatar as user_avatar, 'incoming' as direction, i.status
+            FROM invitations i
+            JOIN users u ON i.sender_id = u.id
+            WHERE i.receiver_id = $1 AND i.status = 'pending'
+        `, [userId]);
 
-    const outgoing = db.prepare(`
-    SELECT i.id, i.receiver_id as user_id, u.name as user_name, u.avatar as user_avatar, 'outgoing' as direction, i.status
-    FROM invitations i
-    JOIN users u ON i.receiver_id = u.id
-    WHERE i.sender_id = ?
-  `).all(userId);
+        const outgoingResult = await db.query(`
+            SELECT i.id, i.receiver_id as user_id, u.name as user_name, u.avatar as user_avatar, 'outgoing' as direction, i.status
+            FROM invitations i
+            JOIN users u ON i.receiver_id = u.id
+            WHERE i.sender_id = $1
+        `, [userId]);
 
-    res.json([...incoming, ...outgoing]);
+        res.json([...incomingResult.rows, ...outgoingResult.rows]);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Server error' });
+    }
 });
 
 // POST /api/invites/:userId/accept
-app.post('/api/invites/:userId/accept', (req, res) => {
+app.post('/api/invites/:userId/accept', async (req, res) => {
     const senderId = req.params.userId;
     const receiverId = req.user.id;
 
-    const invite = db.prepare('SELECT * FROM invitations WHERE sender_id = ? AND receiver_id = ? AND status = "pending"')
-        .get(senderId, receiverId);
+    try {
+        // Start transaction
+        await db.query('BEGIN');
+        
+        // Check if invite exists and is pending
+        const inviteResult = await db.query(
+            'SELECT id FROM invitations WHERE sender_id = $1 AND receiver_id = $2 AND status = $3',
+            [senderId, receiverId, 'pending']
+        );
+        
+        if (inviteResult.rows.length === 0) {
+            await db.query('ROLLBACK');
+            return res.status(404).json({ message: 'Invite not found' });
+        }
 
-    if (!invite) return res.status(404).json({ message: 'Invite not found' });
+        const inviteId = inviteResult.rows[0].id;
 
-    const transact = db.transaction(() => {
-        db.prepare('UPDATE invitations SET status = "accepted" WHERE id = ?').run(invite.id);
-        db.prepare('INSERT OR IGNORE INTO friends (user_id, friend_id) VALUES (?, ?)').run(senderId, receiverId);
-        db.prepare('INSERT OR IGNORE INTO friends (user_id, friend_id) VALUES (?, ?)').run(receiverId, senderId);
-    });
+        // Update invite status
+        await db.query('UPDATE invitations SET status = $1 WHERE id = $2', ['accepted', inviteId]);
+        
+        // Insert friendship (both directions)
+        await db.query(
+            'INSERT INTO friends (user_id, friend_id) VALUES ($1, $2), ($2, $1) ON CONFLICT DO NOTHING',
+            [senderId, receiverId]
+        );
 
-    transact();
-    res.json({ message: 'Invite accepted' });
+        await db.query('COMMIT');
+        res.json({ message: 'Invite accepted' });
+    } catch (err) {
+        await db.query('ROLLBACK');
+        console.error(err);
+        res.status(500).json({ message: 'Server error' });
+    }
 });
 
 // POST /api/invites/:userId/decline
-app.post('/api/invites/:userId/decline', (req, res) => {
+app.post('/api/invites/:userId/decline', async (req, res) => {
     const senderId = req.params.userId;
     const receiverId = req.user.id;
 
-    db.prepare('UPDATE invitations SET status = "declined" WHERE sender_id = ? AND receiver_id = ?')
-        .run(senderId, receiverId);
-
-    res.json({ message: 'Invite declined' });
+    try {
+        await db.query(
+            'UPDATE invitations SET status = $1 WHERE sender_id = $2 AND receiver_id = $3',
+            ['declined', senderId, receiverId]
+        );
+        res.json({ message: 'Invite declined' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Server error' });
+    }
 });
 
 // ── Friends ─────────────────────────────────────────────────────────────────
 
 // GET /api/friends
-app.get('/api/friends', (req, res) => {
-    const friends = db.prepare(`
-    SELECT u.id, u.name, u.avatar, u.last_lat as latitude, u.last_lng as longitude, u.last_seen_at as last_seen,
-           u.visibility_level, u.precision_level, u.tracking_enabled
-    FROM friends f
-    JOIN users u ON f.friend_id = u.id
-    WHERE f.user_id = ?
-  `).all(req.user.id);
+app.get('/api/friends', async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT u.id, u.name, u.avatar, u.last_lat as latitude, u.last_lng as longitude, u.last_seen_at as last_seen,
+                   u.visibility_level, u.precision_level, u.tracking_enabled
+            FROM friends f
+            JOIN users u ON f.friend_id = u.id
+            WHERE f.user_id = $1
+        `, [req.user.id]);
 
-    // Apply privacy logic
-    const processed = friends.map(f => {
-        const isVisible = f.tracking_enabled && (f.visibility_level === 'public' || f.visibility_level === 'friends');
+        const friends = result.rows;
 
-        if (!isVisible || !f.latitude) {
-            return { ...f, latitude: null, longitude: null };
-        }
+        // Apply privacy logic
+        const processed = friends.map(f => {
+            const isVisible = f.tracking_enabled && (f.visibility_level === 'public' || f.visibility_level === 'friends');
 
-        if (f.precision_level === 'city') {
-            // Blur location: Snap to roughly ~5km grid
-            return {
-                ...f,
-                latitude: Math.round(f.latitude * 20) / 20,
-                longitude: Math.round(f.longitude * 20) / 20,
-                is_blurred: true
-            };
-        }
+            if (!isVisible || !f.latitude) {
+                return { ...f, latitude: null, longitude: null };
+            }
 
-        return f;
-    });
+            if (f.precision_level === 'city') {
+                // Blur location: Snap to roughly ~5km grid
+                return {
+                    ...f,
+                    latitude: Math.round(f.latitude * 20) / 20,
+                    longitude: Math.round(f.longitude * 20) / 20,
+                    is_blurred: true
+                };
+            }
 
-    res.json(processed);
+            return f;
+        });
+
+        res.json(processed);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Server error' });
+    }
 });
 
 // DELETE /api/friends/:id
-app.delete('/api/friends/:id', (req, res) => {
+app.delete('/api/friends/:id', async (req, res) => {
     const friendId = req.params.id;
     const userId = req.user.id;
 
-    const transact = db.transaction(() => {
-        db.prepare('DELETE FROM friends WHERE user_id = ? AND friend_id = ?').run(userId, friendId);
-        db.prepare('DELETE FROM friends WHERE user_id = ? AND friend_id = ?').run(friendId, userId);
-    });
+    try {
+        // Start transaction
+        await db.query('BEGIN');
+        
+        // Delete friendship in both directions
+        await db.query(
+            'DELETE FROM friends WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)',
+            [userId, friendId]
+        );
 
-    transact();
-    res.json({ message: 'Friend removed' });
+        await db.query('COMMIT');
+        res.json({ message: 'Friend removed' });
+    } catch (err) {
+        await db.query('ROLLBACK');
+        console.error(err);
+        res.status(500).json({ message: 'Server error' });
+    }
 });
 
 const os = require('os');
