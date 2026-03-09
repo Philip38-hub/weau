@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../core/constants.dart';
 import '../providers/auth_provider.dart';
 import 'map_screen.dart';
@@ -34,9 +35,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   Future<void> _handleSignIn() async {
     setState(() => _signingIn = true);
     try {
-      // TODO: Replace 'YOUR_WEB_CLIENT_ID' with your Web Client ID from Google Cloud Console
       final googleSignIn = GoogleSignIn(
-        serverClientId: '885195804964-8n79jrcupav06megnm6et2jvgth803es.apps.googleusercontent.com', // Needed to get a backend-verifiable idToken
+        serverClientId: dotenv.env['GOOGLE_WEB_CLIENT_ID'], 
         scopes: ['email', 'profile'],
       );
       final googleUser = await googleSignIn.signIn();

@@ -48,3 +48,6 @@ app.*.map.json
 /backend/node_modules
 /backend/.env
 /backend/weau.db
+
+# Environment variables
+.env
