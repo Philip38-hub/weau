@@ -1,11 +1,14 @@
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const { v4: uuidv4 } = require('uuid');
-const jwt = require('jsonwebtoken');
-const { OAuth2Client } = require('google-auth-library');
-const db = require('./database');
-const authMiddleware = require('./middleware/auth');
+import dotenv from 'dotenv';
+import express from 'express';
+import cors from 'cors';
+import { v4 as uuidv4 } from 'uuid';
+import jwt from 'jsonwebtoken';
+import { OAuth2Client } from 'google-auth-library';
+import db from './database.js';
+import authMiddleware from './middleware/auth.js';
+import os from 'os';
+
+dotenv.config();
 
 const app = express();
 const client = new OAuth2Client(); // In real app, pass Client ID
@@ -334,7 +337,6 @@ app.delete('/api/friends/:id', async (req, res) => {
     }
 });
 
-const os = require('os');
 const PORT = process.env.PORT || 3000;
 
 function getNetworkAddress() {
