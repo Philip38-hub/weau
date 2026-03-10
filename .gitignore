@@ -45,9 +45,16 @@ app.*.map.json
 /android/app/release
 
 # Node.js backend
-/backend/node_modules
+/node_modules
 /backend/.env
-/backend/weau.db
+/weau.db
 
 # Environment variables
 .env
+
+RESTRUCTURING_SUMMARY.md
+Railway_Fix_Summary.md
+DEPLOYMENT_GUIDE.md
+DEPLOYMENT_SUMMARY.md
+setup_deployment.sh
+verify_railway_config.sh

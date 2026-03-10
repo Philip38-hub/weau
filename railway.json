@@ -3,8 +3,8 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "cd backend && npm start",
-    "installCommand": "cd backend && npm install"
+    "startCommand": "npm start",
+    "installCommand": "npm install"
   },
   "env": {
     "NODE_ENV": {

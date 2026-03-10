@@ -3,9 +3,8 @@ class AppConstants {
   AppConstants._();
 
   // ── API ──────────────────────────────────────────────────────────────────
-  // Development settings
-  static const String _devHost = '192.168.1.155'; // Change to your LAN IP if on physical device
-  static const String _devBaseUrl = 'http://$_devHost:3000/api';
+  // Development settings - Backend runs on localhost:3000
+  static const String _devBaseUrl = 'http://localhost:3000/api';
   
   // Production settings (update this with your Railway URL after deployment)
   static const String _prodBaseUrl = 'https://your-app-name.up.railway.app/api';
