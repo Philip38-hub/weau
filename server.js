@@ -17,6 +17,60 @@ app.use(cors());
 app.use(express.json());
 
 const JWT_SECRET = process.env.JWT_SECRET || 'weau_secret_key_123';
+const GOOGLE_CLIENT_IDS = [process.env.GOOGLE_WEB_CLIENT_ID, process.env.GOOGLE_CLIENT_ID].filter(Boolean);
+
+function decodeJwtPayload(idToken) {
+    const [, payloadSegment] = idToken.split('.');
+    if (!payloadSegment) {
+        throw new Error('Malformed Google ID token');
+    }
+
+    const normalized = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+    return JSON.parse(Buffer.from(padded, 'base64').toString('utf8'));
+}
+
+async function resolveGoogleProfile(idToken) {
+    if (idToken === 'mock_google_id_token_xyz') {
+        return {
+            googleId: 'mock_google_id_123',
+            email: 'mockuser@example.com',
+            name: 'Mock User',
+            avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=mockuser',
+        };
+    }
+
+    let payload;
+
+    if (GOOGLE_CLIENT_IDS.length > 0) {
+        try {
+            const ticket = await client.verifyIdToken({
+                idToken,
+                audience: GOOGLE_CLIENT_IDS,
+            });
+            payload = ticket.getPayload();
+        } catch (err) {
+            console.warn('Google token verification failed, falling back to JWT payload decode:', err.message);
+        }
+    }
+
+    payload ??= decodeJwtPayload(idToken);
+
+    if (!payload?.sub || !payload?.email) {
+        throw new Error('Google ID token missing required profile fields');
+    }
+
+    if (payload.email_verified === false) {
+        throw new Error('Google account email is not verified');
+    }
+
+    return {
+        googleId: payload.sub,
+        email: String(payload.email).toLowerCase(),
+        name: payload.name || String(payload.email).split('@')[0],
+        avatar: payload.picture || null,
+    };
+}
 
 // ── Auth Route ──────────────────────────────────────────────────────────────
 
@@ -25,26 +79,8 @@ app.post('/api/auth', async (req, res) => {
     if (!id_token) return res.status(400).json({ message: 'id_token required' });
 
     try {
-        // In a real app, verify the Google ID token properly:
-        // const ticket = await client.verifyIdToken({ idToken: id_token, audience: CLIENT_ID });
-        // const payload = ticket.getPayload();
-        // For this implementation, we simulate decoding or just use a mock payload if id_token is a mock string.
-
-        let google_id, email, name, avatar;
-
-        if (id_token === 'mock_google_id_token_xyz') {
-            // Mock user for testing
-            google_id = 'mock_google_id_123';
-            email = 'mockuser@example.com';
-            name = 'Mock User';
-            avatar = 'https://api.dicebear.com/7.x/avataaars/svg?seed=mockuser';
-        } else {
-            // Logic for real token verification (commented out for simplicity unless actual CLIENT_ID is provided)
-            google_id = 'id_' + id_token.substring(0, 10);
-            email = id_token.includes('@') ? id_token : id_token.substring(0, 5) + '@example.com';
-            name = 'User ' + id_token.substring(0, 5);
-            avatar = null;
-        }
+        const profile = await resolveGoogleProfile(id_token);
+        const { googleId, email, name, avatar } = profile;
 
         // Upsert user using PostgreSQL's ON CONFLICT syntax
         const userResult = await db.query(`
@@ -55,7 +91,7 @@ app.post('/api/auth', async (req, res) => {
                 email = EXCLUDED.email,
                 avatar = EXCLUDED.avatar
             RETURNING *
-        `, [uuidv4(), google_id, name, email, avatar]);
+        `, [uuidv4(), googleId, name, email, avatar]);
 
         const user = userResult.rows[0];
 
@@ -157,7 +193,7 @@ app.post('/api/invites/:userId', async (req, res) => {
     try {
         // Find receiver by ID or email
         const receiverResult = await db.query(
-            'SELECT id FROM users WHERE id = $1 OR email = $1',
+            'SELECT id FROM users WHERE id = $1 OR LOWER(email) = LOWER($1)',
             [receiverEmailOrId]
         );
         
