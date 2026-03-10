@@ -7,10 +7,10 @@ class AppConstants {
   static const String _devBaseUrl = 'http://localhost:3000/api';
   
   // Production settings (update this with your Railway URL after deployment)
-  static const String _prodBaseUrl = 'https://your-app-name.up.railway.app/api';
+  static const String _prodBaseUrl = 'https://weau-production.up.railway.app/api';
   
   // Use development URL for now, switch to production after deployment
-  static const String baseUrl = _devBaseUrl;
+  static const String baseUrl = _prodBaseUrl;
 
   // ── Colors ───────────────────────────────────────────────────────────────
   static const int primaryColor = 0xFF6C63FF;

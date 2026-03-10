@@ -5,7 +5,8 @@
 *.swp
 .DS_Store
 .atom/
-.build/
+frontend/build/
+
 .buildlog/
 .history
 .svn/
@@ -45,16 +46,9 @@ app.*.map.json
 /android/app/release
 
 # Node.js backend
-/node_modules
+node_modules
 /backend/.env
 /weau.db
 
 # Environment variables
 .env
-
-RESTRUCTURING_SUMMARY.md
-Railway_Fix_Summary.md
-DEPLOYMENT_GUIDE.md
-DEPLOYMENT_SUMMARY.md
-setup_deployment.sh
-verify_railway_config.sh

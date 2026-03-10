@@ -89,36 +89,56 @@ class FriendProvider extends ChangeNotifier {
   }
 
   /// Sends a friend request to [userId].
-  Future<void> sendInvite(String userId) async {
+  Future<bool> sendInvite(String userId, {required String currentUserId}) async {
     try {
+      _error = null;
       await _api.sendInvite(userId);
+      await fetchInvites(currentUserId);
+      return true;
     } on ApiException catch (e) {
       _error = e.message;
       notifyListeners();
+      return false;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
     }
   }
 
   /// Accepts the invite from [userId] and refreshes the invites list.
-  Future<void> acceptInvite(String userId) async {
+  Future<bool> acceptInvite(String userId, {required String currentUserId}) async {
     try {
+      _error = null;
       await _api.acceptInvite(userId);
-      _invites.removeWhere((i) => i.userId == userId);
-      notifyListeners();
+      await Future.wait([fetchInvites(currentUserId), fetchFriends()]);
+      return true;
     } on ApiException catch (e) {
       _error = e.message;
       notifyListeners();
+      return false;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
     }
   }
 
   /// Declines the invite from [userId] and removes it locally.
-  Future<void> declineInvite(String userId) async {
+  Future<bool> declineInvite(String userId, {required String currentUserId}) async {
     try {
+      _error = null;
       await _api.declineInvite(userId);
-      _invites.removeWhere((i) => i.userId == userId);
-      notifyListeners();
+      await fetchInvites(currentUserId);
+      return true;
     } on ApiException catch (e) {
       _error = e.message;
       notifyListeners();
+      return false;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
     }
   }
 

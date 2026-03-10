@@ -185,7 +185,7 @@ class ApiService {
   /// Sends a friend request to [userId].
   Future<void> sendInvite(String userId) async {
     final response = await _client.post(
-      Uri.parse('$_base/invites/$userId'),
+      Uri.parse('$_base/invites/${Uri.encodeComponent(userId)}'),
       headers: await _authHeaders(),
     );
     _decode(response);
@@ -197,7 +197,7 @@ class ApiService {
   /// Decode with [InviteModel.fromJson] on the caller side.
   Future<List<dynamic>> getInvites(String userId) async {
     final response = await _client.get(
-      Uri.parse('$_base/invites/$userId'),
+      Uri.parse('$_base/invites/${Uri.encodeComponent(userId)}'),
       headers: await _authHeaders(),
     );
     return _decodeList(response);
@@ -206,7 +206,7 @@ class ApiService {
   /// POST /invites/{user_id}/accept
   Future<void> acceptInvite(String userId) async {
     final response = await _client.post(
-      Uri.parse('$_base/invites/$userId/accept'),
+      Uri.parse('$_base/invites/${Uri.encodeComponent(userId)}/accept'),
       headers: await _authHeaders(),
     );
     _decode(response);
@@ -215,7 +215,7 @@ class ApiService {
   /// POST /invites/{user_id}/decline
   Future<void> declineInvite(String userId) async {
     final response = await _client.post(
-      Uri.parse('$_base/invites/$userId/decline'),
+      Uri.parse('$_base/invites/${Uri.encodeComponent(userId)}/decline'),
       headers: await _authHeaders(),
     );
     _decode(response);

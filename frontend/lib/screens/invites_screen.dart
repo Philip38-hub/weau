@@ -16,6 +16,17 @@ class _InvitesScreenState extends State<InvitesScreen> with SingleTickerProvider
   late final TabController _tabController;
   final _emailController = TextEditingController();
 
+  void _showSnackBar(String message, {required Color backgroundColor}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: backgroundColor,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -36,16 +47,26 @@ class _InvitesScreenState extends State<InvitesScreen> with SingleTickerProvider
   Future<void> _sendInvite() async {
     final email = _emailController.text.trim();
     if (email.isEmpty) return;
-    await context.read<FriendProvider>().sendInvite(email);
-    _emailController.clear();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Invite sent to $email'),
-          backgroundColor: const Color(AppConstants.primaryColor),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
+
+    final auth = context.read<AuthProvider>();
+    final friends = context.read<FriendProvider>();
+    final success = await friends.sendInvite(
+      email,
+      currentUserId: auth.user?.id ?? '',
+    );
+
+    if (!mounted) return;
+
+    if (success) {
+      _emailController.clear();
+      _showSnackBar(
+        'Invite sent to $email',
+        backgroundColor: const Color(AppConstants.primaryColor),
+      );
+    } else {
+      _showSnackBar(
+        friends.error ?? 'Failed to send invite.',
+        backgroundColor: const Color(AppConstants.accentColor),
       );
     }
   }
@@ -138,6 +159,25 @@ class _InviteList extends StatelessWidget {
 
   const _InviteList({required this.type, required this.cardColor});
 
+  Future<void> _handleInviteAction(
+    BuildContext context, {
+    required Future<bool> Function(String currentUserId) action,
+    required FriendProvider provider,
+    required String successMessage,
+  }) async {
+    final currentUserId = context.read<AuthProvider>().user?.id ?? '';
+    final success = await action(currentUserId);
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(success ? successMessage : (provider.error ?? 'Request failed.')),
+        backgroundColor: success ? Colors.green : const Color(AppConstants.accentColor),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -185,11 +225,27 @@ class _InviteList extends StatelessWidget {
                         children: [
                           IconButton(
                             icon: const Icon(Icons.check_circle_rounded, color: Colors.green),
-                            onPressed: () => ctx.read<FriendProvider>().acceptInvite(invite.userId),
+                            onPressed: () => _handleInviteAction(
+                              ctx,
+                              provider: ctx.read<FriendProvider>(),
+                              action: (currentUserId) => ctx.read<FriendProvider>().acceptInvite(
+                                invite.userId,
+                                currentUserId: currentUserId,
+                              ),
+                              successMessage: 'Invite accepted.',
+                            ),
                           ),
                           IconButton(
                             icon: const Icon(Icons.cancel_rounded, color: Color(AppConstants.accentColor)),
-                            onPressed: () => ctx.read<FriendProvider>().declineInvite(invite.userId),
+                            onPressed: () => _handleInviteAction(
+                              ctx,
+                              provider: ctx.read<FriendProvider>(),
+                              action: (currentUserId) => ctx.read<FriendProvider>().declineInvite(
+                                invite.userId,
+                                currentUserId: currentUserId,
+                              ),
+                              successMessage: 'Invite declined.',
+                            ),
                           ),
                         ],
                       )
