@@ -1,5 +1,5 @@
-const { Pool } = require('pg');
-const { v4: uuidv4 } = require('uuid');
+import { Pool } from 'pg';
+import { v4 as uuidv4 } from 'uuid';
 
 // Database connection configuration
 const pool = new Pool({
@@ -70,4 +70,4 @@ const db = {
   end: () => pool.end(),
 };
 
-module.exports = db;
+export default db;
