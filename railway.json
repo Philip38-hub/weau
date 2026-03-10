@@ -1,0 +1,20 @@
+{
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "startCommand": "cd backend && npm start",
+    "installCommand": "cd backend && npm install"
+  },
+  "env": {
+    "NODE_ENV": {
+      "value": "production",
+      "fromMetadata": false
+    }
+  },
+  "services": [
+    {
+      "type": "postgresql"
+    }
+  ]
+}
